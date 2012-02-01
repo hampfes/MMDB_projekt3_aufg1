@@ -1,0 +1,7 @@
+.settings/*
+bin/*
+wang-index/*
+.project
+desktop.ini
+.dropbox
+.classpath
