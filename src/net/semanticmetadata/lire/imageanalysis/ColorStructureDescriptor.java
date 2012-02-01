@@ -1,5 +1,3 @@
-package net.semanticmetadata.lire.imageanalysis;
-
 /*
  * Created on 05.11.2004
  * Color Structure Descriptor for MPEG7 VizIR
@@ -23,17 +21,17 @@ package net.semanticmetadata.lire.imageanalysis;
  * For full description see MPEG7-CSD.pdf
  */
 
-import net.semanticmetadata.lire.utils.SerializationUtils;
+package org.vizir.descriptor.csd;
 
 import org.jdom.*;
 import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
 import org.jdom.input.SAXBuilder;
-
-import java.awt.Color;
 import java.awt.image.*;
 import java.io.FileOutputStream;
-import java.util.StringTokenizer;
+
+import org.vizir.media.*;
+import org.vizir.*;
 
 /**
  * Contains all necessery methods for feature extraction from media content using Color structure descriptor
@@ -41,7 +39,7 @@ import java.util.StringTokenizer;
  * @see MPEG7-CSD.pdf
  */
 
-public class ColorStructureDescriptor implements LireFeature {
+public class ColorStructureDescriptor implements Descriptor {
 
     /** Should the result be written to a XML file on the disk? */
 
@@ -61,8 +59,8 @@ public class ColorStructureDescriptor implements LireFeature {
 
     /** Color Structure Histogram */
 
-    private double[] ColorHistogram = null;
-    
+    private float[] ColorHistogram = null;
+
     /**
     * Quantization table for 256, 128, 64 and 32 quantisation bins.
     *
@@ -105,23 +103,23 @@ public class ColorStructureDescriptor implements LireFeature {
      * the CSD extraction and quantization.
      *
      * @param MediaContent
-     * @throws Exception 
+     * @throws Exception
      */
 
-    public void extract(BufferedImage image)
+    public void extractFeature(MediaContent mc) throws Exception
     {
 
         // load image to BufferedImage
 
-//        BufferedImage targetImage = mc.getImage();
-        double height = image.getHeight();
-        double width = image.getWidth();
+        BufferedImage targetImage = mc.getImage();
+        double height = mc.getSize().getHeight();
+        double width = mc.getSize().getWidth();
 
         int temp[][] =  new int[(int)height - 1][(int)width - 1];
 
-//        if (width > height) {System.out.println("\nExit - vizir bug: file unsupported -> MediaFrame.getPixelAt"); System.exit(0);  }
+        if (width > height) {System.out.println("\nExit - vizir bug: file unsupported -> MediaFrame.getPixelAt"); System.exit(0);  }
 
-//        MediaFrame mf = new MediaFrame(targetImage);
+        MediaFrame mf = new MediaFrame(targetImage);
 
         int ir[][] = temp;
         int ig[][] = temp;
@@ -138,41 +136,20 @@ public class ColorStructureDescriptor implements LireFeature {
 
         for (int ch = 0; ch < (int)height - 1; ch++) {
             for (int cw = 0; cw < (int)width - 1; cw++) {
-            	int pixel = image.getRGB(cw, ch);
-            	Color c = new Color(pixel);
-            	ir[ch][cw] = c.getRed(); // RED
-                ig[ch][cw] = c.getGreen(); // GREEN
-                ib[ch][cw] = c.getBlue(); // BLUE
-                
-//                ir[ch][cw] = mf.getPixelAt(ch,cw).getComponent(0); // RED
-//                ig[ch][cw] = mf.getPixelAt(ch,cw).getComponent(1); // GREEN
-//                ib[ch][cw] = mf.getPixelAt(ch,cw).getComponent(2); // BLUE
+                ir[ch][cw] = mf.getPixelAt(ch,cw).getComponent(0); // RED
+                ig[ch][cw] = mf.getPixelAt(ch,cw).getComponent(1); // GREEN
+                ib[ch][cw] = mf.getPixelAt(ch,cw).getComponent(2); // BLUE
 
-                int[] tempHMMD;
-				try {
-					tempHMMD = RGB2HMMD(ir[ch][cw],ig[ch][cw],ib[ch][cw]);
-					
-					iH[ch][cw]   = tempHMMD[0];                     // H
-	                iMax[ch][cw] = tempHMMD[1];                     // Max
-	                iMin[ch][cw] = tempHMMD[2];                         // Min
-	                iDiff[ch][cw]= tempHMMD[3];                         // Diff
-	                iSum[ch][cw] = tempHMMD[4];                         // Sum
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					System.out.println("Error in CSD1: " + e.toString());
-					e.printStackTrace();
-				}
-                
+                int[] tempHMMD = RGB2HMMD(ir[ch][cw],ig[ch][cw],ib[ch][cw]);
+                iH[ch][cw]   = tempHMMD[0];                     // H
+                iMax[ch][cw] = tempHMMD[1];                     // Max
+                iMin[ch][cw] = tempHMMD[2];                         // Min
+                iDiff[ch][cw]= tempHMMD[3];                         // Diff
+                iSum[ch][cw] = tempHMMD[4];                         // Sum
                 }
             }
 
-        try {
-			ColorHistogram = HMMDColorStuctureExtraction(iH, iMax, iMin, iDiff, iSum, (int)height, (int)width);
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			System.out.println("Error on CSD2: " + e.toString());
-			e.printStackTrace();
-		} // extract HMMD colors and make histogram
+        ColorHistogram = HMMDColorStuctureExtraction(iH, iMax, iMin, iDiff, iSum, (int)height, (int)width); // extract HMMD colors and make histogram
 
         // if ( M != 256 ) ColorHistogram = reQuantization(ColorHistogram); // requantize and normalize histogram to 0-255 range
         ColorHistogram = reQuantization(ColorHistogram);
@@ -192,7 +169,7 @@ public class ColorStructureDescriptor implements LireFeature {
      * @throws Exception
      */
 
-    private static double[] HMMDColorStuctureExtraction(int iH[][], int iMax[][], int iMin[][], int iDiff[][], int iSum[][], int height, int width) throws Exception
+    private static float[] HMMDColorStuctureExtraction(int iH[][], int iMax[][], int iMin[][], int iDiff[][], int iSum[][], int height, int width) throws Exception
         {
             long hw = height * width;
             long p = Math.round(0.5 * Math.log(hw)) - 8;
@@ -207,7 +184,7 @@ public class ColorStructureDescriptor implements LireFeature {
 
             if (M == 0) { setQuantizationLevels(64); System.out.println("WARNING: quantization size will be set to default: 64");} // default value is 64
 
-            double h[] = new double[M];       // CSD temp
+            float h[] = new float[M];       // CSD temp
             int t[] = new int[M];       // CSD temp - int sollte stimmen
 
             for (int i = 0; i < M; i++) { /* t[i] = 0; */ h[i] = 0.0f; }
@@ -319,9 +296,9 @@ public class ColorStructureDescriptor implements LireFeature {
      * @return float[] - normalized Color Structure Histogram
      */
 
-    private double[] reQuantization(double[] colorHistogramTemp) {
+    private float[] reQuantization(float[] colorHistogramTemp) {
 
-        double[] uniformCSD = new double[colorHistogramTemp.length];
+        float[] uniformCSD = new float[colorHistogramTemp.length];
 
         for (int i=0; i < colorHistogramTemp.length; i++)
         {
@@ -475,90 +452,4 @@ public class ColorStructureDescriptor implements LireFeature {
     {
         XMLfileName = XMLfile;
     }
-
-	@Override
-	public byte[] getByteArrayRepresentation() {
-		return SerializationUtils.toByteArray(ColorHistogram);
-	}
-
-	@Override
-	public void setByteArrayRepresentation(byte[] in) {
-		ColorHistogram = SerializationUtils.toDoubleArray(in);
-	}
-
-	@Override
-	public double[] getDoubleHistogram() {
-		return ColorHistogram;
-	}
-
-	@Override
-	public float getDistance(LireFeature vd) {
-		// Check if instance of the right class ...
-        if (!(vd instanceof ColorStructureDescriptor))
-            throw new UnsupportedOperationException("Wrong descriptor.");
-
-        // casting ...
-        ColorStructureDescriptor ch = (ColorStructureDescriptor) vd;
-
-        // check if parameters are fitting ...
-        if ((ch.ColorHistogram.length != ColorHistogram.length))
-            throw new UnsupportedOperationException("Histogram lengths or color spaces do not match");
-
-        // Tanimoto coefficient
-        double Result = 0;
-        double Temp1 = 0;
-        double Temp2 = 0;
-
-        double TempCount1 = 0, TempCount2 = 0, TempCount3 = 0;
-
-        for (int i = 0; i < ch.ColorHistogram.length; i++) {
-            Temp1 += ch.ColorHistogram[i];
-            Temp2 += ColorHistogram[i];
-        }
-
-        if (Temp1 == 0 || Temp2 == 0) Result = 100;
-        if (Temp1 == 0 && Temp2 == 0) Result = 0;
-
-        if (Temp1 > 0 && Temp2 > 0) {
-            for (int i = 0; i < ch.ColorHistogram.length; i++) {
-                TempCount1 += (ch.ColorHistogram[i] / Temp1) * (ColorHistogram[i] / Temp2);
-                TempCount2 += (ColorHistogram[i] / Temp2) * (ColorHistogram[i] / Temp2);
-                TempCount3 += (ch.ColorHistogram[i] / Temp1) * (ch.ColorHistogram[i] / Temp1);
-
-            }
-
-            Result = (100 - 100 * (TempCount1 / (TempCount2 + TempCount3
-                    - TempCount1))); //Tanimoto
-        }
-        return (float) Result;
-	}
-
-	@Override
-	public String getStringRepresentation() {
-		// FCTH is quantized to 3bits / bin ... therefore ints are enough.
-        StringBuilder sb = new StringBuilder(ColorHistogram.length * 2 + 25);
-        sb.append("fcth");
-        sb.append(' ');
-        sb.append(ColorHistogram.length);
-        sb.append(' ');
-        for (double aData : ColorHistogram) {
-            sb.append((int) aData);
-            sb.append(' ');
-        }
-        return sb.toString().trim();
-	}
-
-	@Override
-	public void setStringRepresentation(String s) {
-		StringTokenizer st = new StringTokenizer(s);
-        if (!st.nextToken().equals("fcth"))
-            throw new UnsupportedOperationException("This is not a FCTH descriptor.");
-        ColorHistogram = new double[Integer.parseInt(st.nextToken())];
-        for (int i = 0; i < ColorHistogram.length; i++) {
-            if (!st.hasMoreTokens())
-                throw new IndexOutOfBoundsException("Too few numbers in string representation.");
-            ColorHistogram[i] = Integer.parseInt(st.nextToken());
-        }
-	}
 }
-
